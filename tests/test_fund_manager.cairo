@@ -149,4 +149,3 @@ fn test_fund_deployed_event() {
             ]
         );
 }
-
