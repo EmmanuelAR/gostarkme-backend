@@ -42,6 +42,7 @@ pub mod FundManager {
         current_id: u128,
         funds: LegacyMap::<u128, ContractAddress>,
         fund_class_hash: ClassHash,
+        fund_owner: LegacyMap::<ContractAddress, ContractAddress>,
     }
 
     // ***************************************************************************************
@@ -104,6 +105,7 @@ pub mod FundManager {
                 .unwrap();
 
             self.funds.write(self.current_id.read(), new_fund_address);
+            self.fund_owner.write(new_fund_address, get_caller_address());
             self
                 .emit(
                     FundDeployed {
