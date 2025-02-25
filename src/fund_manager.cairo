@@ -16,6 +16,7 @@ pub trait IFundManager<TContractState> {
     fn get_fund(self: @TContractState, id: u128) -> ContractAddress;
     fn get_owner(self: @TContractState) -> ContractAddress;
     fn get_fund_class_hash(self: @TContractState) -> ClassHash;
+    fn get_fund_owner(self: @TContractState, fund_address: ContractAddress) -> ContractAddress;
 }
 
 #[starknet::contract]
@@ -128,6 +129,9 @@ pub mod FundManager {
         }
         fn get_fund_class_hash(self: @ContractState) -> ClassHash {
             return self.fund_class_hash.read();
+        }
+        fn get_fund_owner(self: @ContractState, fund_address: ContractAddress) -> ContractAddress {
+            return self.fund_owner.read(fund_address);
         }
     }
 }
