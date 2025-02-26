@@ -93,11 +93,31 @@ fn test_new_fund() {
         .new_fund(
             NAME(), GOAL(), EVIDENCE_LINK(), CONTACT_HANDLE(), REASON(), FundTypeConstants::PROJECT
         );
+    let fund_address = fund_manager_contract.get_fund(1);
     let expected_fund_class_hash = get_class_hash(fund_manager_contract.get_fund(1));
     let current_id = fund_manager_contract.get_current_id();
+    let fund_owner = fund_manager_contract.get_fund_owner(fund_address);
     assert(expected_fund_class_hash == fund_class_hash, 'Invalid fund address');
     assert(current_id == 2, 'Invalid current ID');
+    assert(fund_owner == OWNER(), 'Invalid fund owner');
 }
+
+#[test]
+fn test_new_fund_as_other_user() {
+    start_cheat_caller_address_global(OTHER_USER());
+    let (contract_address, _) = _setup_();
+    let fund_manager_contract = IFundManagerDispatcher { contract_address };
+
+    fund_manager_contract
+        .new_fund(
+            NAME(), GOAL(), EVIDENCE_LINK(), CONTACT_HANDLE(), REASON(), FundTypeConstants::PROJECT
+        );
+
+    let fund_address = fund_manager_contract.get_fund(1);
+    let fund_owner = fund_manager_contract.get_fund_owner(fund_address);
+    assert(fund_owner == OTHER_USER(), 'Invalid fund owner');
+}
+
 
 #[test]
 #[should_panic(expected: 'Goal must be at least 500')]
