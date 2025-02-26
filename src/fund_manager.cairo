@@ -1,6 +1,13 @@
 use starknet::ContractAddress;
 use starknet::class_hash::ClassHash;
 
+#[derive(Drop, Serde, starknet::Store, Clone)]
+pub struct FundOwnerInfo {
+    fund_index: u128,
+    fund_address: ContractAddress,
+    owner: ContractAddress
+}
+
 #[starknet::interface]
 pub trait IFundManager<TContractState> {
     fn new_fund(
@@ -16,7 +23,7 @@ pub trait IFundManager<TContractState> {
     fn get_fund(self: @TContractState, id: u128) -> ContractAddress;
     fn get_owner(self: @TContractState) -> ContractAddress;
     fn get_fund_class_hash(self: @TContractState) -> ClassHash;
-    fn get_fund_owner(self: @TContractState, fund_address: ContractAddress) -> ContractAddress;
+    fn get_all_fund_owners(self: @TContractState) -> Array<FundOwnerInfo>;
 }
 
 #[starknet::contract]
@@ -24,6 +31,7 @@ pub mod FundManager {
     // ***************************************************************************************
     //                            IMPORT
     // ***************************************************************************************
+    use super::FundOwnerInfo;
     use core::array::ArrayTrait;
     use core::traits::TryInto;
     use starknet::ContractAddress;
@@ -31,6 +39,8 @@ pub mod FundManager {
     use starknet::class_hash::ClassHash;
     use starknet::get_caller_address;
     use openzeppelin::utils::serde::SerializedAppend;
+    use gostarkme::fund::IFundDispatcher;
+    use gostarkme::fund::IFundDispatcherTrait;
     use gostarkme::constants::{funds::{fund_constants::FundConstants},};
 
 
@@ -44,6 +54,8 @@ pub mod FundManager {
         funds: LegacyMap::<u128, ContractAddress>,
         fund_class_hash: ClassHash,
         fund_owner: LegacyMap::<ContractAddress, ContractAddress>,
+        fund_owners: LegacyMap::<u128, ContractAddress>,
+        total_funds: u128,
     }
 
     // ***************************************************************************************
@@ -54,6 +66,7 @@ pub mod FundManager {
         self.owner.write(get_caller_address());
         self.fund_class_hash.write(fund_class_hash.try_into().unwrap());
         self.current_id.write(1);
+        self.total_funds.write(0);
     }
 
 
@@ -102,8 +115,7 @@ pub mod FundManager {
             Serde::serialize(@fund_type, ref call_data);
             let (new_fund_address, _) = deploy_syscall(
                 self.fund_class_hash.read(), 12345, call_data.span(), false
-            )
-                .unwrap();
+            ).unwrap();
 
             self.funds.write(self.current_id.read(), new_fund_address);
             self.fund_owner.write(new_fund_address, get_caller_address());
@@ -117,6 +129,7 @@ pub mod FundManager {
                 );
 
             self.current_id.write(self.current_id.read() + 1);
+            self.total_funds.write(self.total_funds.read() + 1);
         }
         fn get_current_id(self: @ContractState) -> u128 {
             return self.current_id.read();
@@ -130,8 +143,19 @@ pub mod FundManager {
         fn get_fund_class_hash(self: @ContractState) -> ClassHash {
             return self.fund_class_hash.read();
         }
-        fn get_fund_owner(self: @ContractState, fund_address: ContractAddress) -> ContractAddress {
-            return self.fund_owner.read(fund_address);
+        fn get_all_fund_owners(self: @ContractState) -> Array<FundOwnerInfo> {
+            let mut fund_owners: Array<FundOwnerInfo> = ArrayTrait::new();
+            let total_funds: u128 = self.total_funds.read();
+            let mut fund_id: u128 = 1;
+
+            while fund_id <= total_funds {
+                let fund_address: ContractAddress = self.funds.read(fund_id);
+                let owner: ContractAddress = self.fund_owner.read(fund_address);
+                fund_owners.append(FundOwnerInfo { fund_index: fund_id, fund_address, owner });
+                fund_id += 1;
+            };
+
+            fund_owners
         }
     }
 }
