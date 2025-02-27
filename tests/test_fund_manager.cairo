@@ -169,3 +169,33 @@ fn test_fund_deployed_event() {
             ]
         );
 }
+
+#[test]
+fn test_get_all_fund_owners(){
+    start_cheat_caller_address_global(OWNER());
+    let (contract_address, _) = _setup_();
+    let fund_manager_contract = IFundManagerDispatcher { contract_address };
+
+    // funds Array should be empty
+    let fund_owners = fund_manager_contract.get_all_fund_owners();
+    assert(fund_owners.is_empty(), 'fund should be empty');
+}
+
+#[test]
+fn test_get_all_fund_owners_owner_data(){
+    start_cheat_caller_address_global(OWNER());
+    let (contract_address, _) = _setup_();
+    let fund_manager_contract = IFundManagerDispatcher { contract_address };
+
+    // funds Array should be empty
+    let fund_owners = fund_manager_contract.get_all_fund_owners();
+    assert(fund_owners.is_empty(), 'fund should be empty');
+
+    // set fund
+    fund_manager_contract
+    .new_fund(
+        NAME(), GOAL(), EVIDENCE_LINK(), CONTACT_HANDLE(), REASON(), FundTypeConstants::PROJECT
+    );
+    let fund_owners = fund_manager_contract.get_all_fund_owners();   
+    assert_eq!(fund_owners.len(), 1, "There should be one fund after the first donation");  
+}
