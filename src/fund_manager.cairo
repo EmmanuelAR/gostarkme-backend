@@ -24,6 +24,7 @@ pub trait IFundManager<TContractState> {
     fn get_owner(self: @TContractState) -> ContractAddress;
     fn get_fund_class_hash(self: @TContractState) -> ClassHash;
     fn get_all_fund_owners(self: @TContractState) -> Array<FundOwnerInfo>;
+    fn get_fund_owner(self: @TContractState, fund_address: ContractAddress) -> ContractAddress;
 }
 
 #[starknet::contract]
@@ -115,7 +116,8 @@ pub mod FundManager {
             Serde::serialize(@fund_type, ref call_data);
             let (new_fund_address, _) = deploy_syscall(
                 self.fund_class_hash.read(), 12345, call_data.span(), false
-            ).unwrap();
+            )
+                .unwrap();
 
             self.funds.write(self.current_id.read(), new_fund_address);
             self.fund_owner.write(new_fund_address, get_caller_address());
@@ -156,6 +158,9 @@ pub mod FundManager {
             };
 
             fund_owners
+        }
+        fn get_fund_owner(self: @ContractState, fund_address: ContractAddress) -> ContractAddress {
+            return self.fund_owner.read(fund_address);
         }
     }
 }
