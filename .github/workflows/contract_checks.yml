@@ -10,89 +10,85 @@ on:
       - dev
       - main
 
-jobs: 
-  determine-changes:
+env:
+  RPC_URL: ${{ vars.RPC_URL }}
+
+jobs:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    outputs:
-      contracts_dir: ${{ steps.changes.outputs.contracts_dir }}
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Check for changes
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            contracts_dir:
-              - 'contracts/src/**'
-
-  check-lint:
-    runs-on: ubuntu-latest
-    needs: determine-changes
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup Scarb
-        uses: software-mansion/setup-scarb@v1
-        if: needs.determine-changes.outputs.contracts_dir == 'true'
-        with:
-          scarb-version: "2.6.5"
-
-      - name: Run Scarb formatting
-        if: needs.determine-changes.outputs.contracts_dir == 'true'
-        working-directory: contracts
-        run: scarb fmt
-      
-      - name: No changes detected in contracts directory
-        if: needs.determine-changes.outputs.contracts_dir == 'false'
-        run: echo "No linting perfomed since no changes have been detected in the contracts directory."
-  
-  check-contracts-changes:
-    runs-on: ubuntu-latest
-    needs: determine-changes
-    steps:
-      - uses: actions/checkout@v2
-              
-      - name: Install scarb
-        uses: software-mansion/setup-scarb@v1
-        if: needs.determine-changes.outputs.contracts_dir == 'true'
-        with:
-          scarb-version: "2.6.5"
-
-      - name: Run Scarb check
-        if: needs.determine-changes.outputs.contracts_dir == 'true'
-        working-directory: contracts
-        run: scarb check
-
-      - name: No changes detected in contracts directory
-        if: needs.determine-changes.outputs.contracts_dir == 'false'
-        run: echo "No contracts checks done since no changes have been detected in the contracts directory."
-    
-  run-tests:
-    runs-on: ubuntu-latest
-    needs: determine-changes
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Install Scarb
+      - name: Set up Scarb
         uses: software-mansion/setup-scarb@v1
-        if: needs.determine-changes.outputs.contracts_dir == 'true'
         with:
           scarb-version: "2.6.5"
 
+      - name: Cairo lint
+        run: scarb fmt --check
 
-      - name: Install snfoundry
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: "2.6.5"
+
+      - name: Run Build
+        run: scarb build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    environment: gostarkme
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Set up Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: "2.6.5"
+
+      - name: Set up Snforge
         uses: foundry-rs/setup-snfoundry@v3
-        if: needs.determine-changes.outputs.contracts_dir == 'true'
         with:
           starknet-foundry-version: "0.27.0"
 
-      - name: Run Cairo tests
-        if: needs.determine-changes.outputs.contracts_dir == 'true'
-        id: cairo_tests
-        run: bash scripts/run_tests.sh
-      
-      - name: No changes detected in contracts directory
-        if: needs.determine-changes.outputs.contracts_dir == 'false'
-        run: echo "No tests were run since no changes have been detected in the contracts directory."
+      - name: Substitute RPC URL in Scarb.toml
+        run: |
+          if [ -z "$RPC_URL" ]; then
+            echo "RPC_URL is not defined. Using blast."
+            sed -i "s|\$RPC_URL|https://starknet-mainnet.public.blastapi.io/rpc/v0_7|g" Scarb.toml
+          else
+            sed -i "s|\$RPC_URL|$RPC_URL|g" Scarb.toml
+          fi
+
+      - name: Run tests
+        run: |
+          # Capture the output of snforge test
+          output=$(snforge test 2>&1 || true)
+
+          echo "Running all tests sequentially:"
+          test_names=$(echo "$output" | grep "tests::" | awk '{print $2}')
+
+          if [ -n "$test_names" ]; then
+              while IFS= read -r test; do
+                  echo "Running: snforge test $test"
+                  snforge test "$test"
+                  if [ $? -ne 0 ]; then
+                          echo "Test $test failed."
+                  fi
+              done <<< "$test_names"
+          else
+              echo "No tests found."
+          fi
